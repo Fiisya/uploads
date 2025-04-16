@@ -1,5 +1,5 @@
 ## Run the bot
-```cmd
+```javascript
 async function alfixdRaw(fileBuffer) {
     try {
         const form = new FormData();

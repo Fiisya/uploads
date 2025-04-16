@@ -1,4 +1,4 @@
-## Run the bot
+## run
 ```javascript
 async function alfixdRaw(fileBuffer) {
     try {

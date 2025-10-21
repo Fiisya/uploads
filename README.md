@@ -5,7 +5,7 @@ async function alfixdRaw(fileBuffer) {
         const form = new FormData();
         form.append('file', fileBuffer, { filename: 'upload.jpg' }); // Tambahkan nama file
 
-        const response = await fetch('https://upfilegh.alfiisyll.biz.id/upload', {
+        const response = await fetch('https://uploadraw.vercel.app/upload', {
             method: 'POST',
             body: form,
             headers: form.getHeaders(),

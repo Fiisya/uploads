@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Upload File GH</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="https://files.catbox.moe/f86etj.jpg?format=png&name=900x900">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+    .fade-slide {
+      opacity: 0;
+      transform: translateY(30px);
+      animation: fadeInUp 1s ease-out forwards;
+    }
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body class="bg-[#061425] text-white flex flex-col items-center justify-center h-screen">
+  <p align="center" class="mb-4">
+    <img src="https://raw.githubusercontent.com/Bell575/Upload/main/uploads/1744651162396.jpeg" width="30%" height="30%" />
+  </p>
+  <div class="bg-[#0d1b2a] p-8 rounded shadow-lg w-96 fade-slide">
+    <h1 class="text-2xl font-semibold mb-4">Upload file ke GitHub</h1>
+    <form ref="uploadForm" id="uploadForm" action="/upload" method="post" encType="multipart/form-data">
+      <input type="file" name="file"
+        class="mb-4 block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#1e3a5f] file:text-white transition-all duration-300 hover:file:bg-[#295280]" />
+      <div class="flex justify-center">
+        <button type="submit" id="uploadButton"
+          class="bg-[#1e3a5f] hover:bg-[#295280] text-white font-bold py-2 px-4 rounded transition-all duration-300">
+          Upload File
+        </button>
+        <div id="loadingIndicator" class="ml-2 hidden">
+          <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+            viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+              stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 
+              1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+      </div>
+    </form>
+  </div>
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadButton = document.getElementById('uploadButton');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+
+    uploadForm.addEventListener('submit', () => {
+      uploadButton.disabled = true;
+      loadingIndicator.classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlfiXD Image Tools - Upscale, Remove Background & Edit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #6366f1; --secondary-color: #8b5cf6; --accent-color: #ec4899;
+            --dark-color: #1e293b; --light-color: #f8fafc;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f5f7fa; color: #333; }
+        .hero-section { background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; padding: 4rem 0; margin-bottom: 2rem; }
+        .tool-card { border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: all 0.3s ease; overflow: hidden; height: 100%; }
+        .tool-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        .tool-header { background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); color: white; padding: 1.5rem; text-align: center; }
+        .tool-body { padding: 2rem; }
+        .upload-area { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 2rem; text-align: center; background-color: #f8fafc; transition: all 0.3s ease; cursor: pointer; }
+        .upload-area:hover { border-color: var(--primary-color); background-color: #f1f5f9; }
+        .upload-area.dragover { border-color: var(--accent-color); background-color: #f0f9ff; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); border: none; border-radius: 8px; padding: 0.75rem 1.5rem; font-weight: 600; transition: all 0.3s ease; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4); }
+        
+        /* === KODE YANG DIPERBAIKI (SELECTOR MENGGUNAKAN #) === */
+        #imagePreview {
+            max-height: 250px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #imagePreview img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        /* ======================================================= */
+
+        .result-container { margin-top: 2rem; }
+        .result-image img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        .loading-spinner { display: none; margin: 2rem auto; }
+        .form-control, .form-select { border-radius: 8px; border: 1px solid #e2e8f0; padding: 0.75rem; }
+        .form-control:focus, .form-select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+        .feature-icon { font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem; }
+        .nav-tabs { border-bottom: none; }
+        .nav-tabs .nav-link { border-radius: 8px 8px 0 0; font-weight: 600; color: var(--dark-color); border: 1px solid transparent; }
+        .nav-tabs .nav-link.active { background: white; color: var(--primary-color); border-color: #dee2e6 #dee2e6 white; }
+        .tab-content { background: white; border-radius: 0 0 8px 8px; border: 1px solid #dee2e6; border-top: none; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1050; }
+        footer { background-color: var(--dark-color); color: white; padding: 3rem 0; margin-top: 4rem; }
+        .social-icon { font-size: 1.5rem; margin: 0 0.5rem; color: white; transition: color 0.3s ease; }
+        .social-icon:hover { color: var(--accent-color); }
+    </style>
+</head>
+<body>
+    <header class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold mb-4">AlfiXD Image Tools</h1>
+            <p class="lead mb-4">Tingkatkan kualitas, hapus background, dan edit gambar dengan kekuatan AI.</p>
+            <a href="#tools" class="btn btn-light btn-lg">Mulai Sekarang <i class="bi bi-arrow-down-circle ms-2"></i></a>
+        </div>
+    </header>
+
+    <main class="container mb-5">
+        <section id="tools" class="mb-5">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <div class="tool-card">
+                        <div class="tool-header"><i class="bi bi-cloud-upload fs-1"></i><h3>1. Upload Gambar</h3></div>
+                        <div class="tool-body">
+                            <div class="upload-area" id="uploadArea">
+                                <i class="bi bi-image fs-1 text-muted mb-3"></i>
+                                <p class="mb-2">Drag & drop gambar ke sini</p>
+                                <p class="text-muted mb-3">atau</p>
+                                <button type="button" class="btn btn-secondary">Pilih File</button>
+                                <input type="file" id="imageInput" accept="image/*" class="d-none">
+                            </div>
+                            <div id="imagePreview" class="text-center mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="tool-card p-3">
+                         <h3 class="text-center mb-3"><i class="bi bi-tools me-2"></i>2. Pilih Tool</h3>
+                        <ul class="nav nav-tabs" id="toolTabs" role="tablist">
+                            <li class="nav-item flex-fill text-center" role="presentation">
+                                <button class="nav-link active w-100" data-bs-toggle="tab" data-bs-target="#upscale" type="button"><i class="bi bi-zoom-in me-2"></i>Upscale</button>
+                            </li>
+                            <li class="nav-item flex-fill text-center" role="presentation">
+                                <button class="nav-link w-100" data-bs-toggle="tab" data-bs-target="#removebg" type="button"><i class="bi bi-scissors me-2"></i>Remove BG</button>
+                            </li>
+                            <li class="nav-item flex-fill text-center" role="presentation">
+                                <button class="nav-link w-100" data-bs-toggle="tab" data-bs-target="#edit" type="button"><i class="bi bi-magic me-2"></i>Edit AI</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content p-4">
+                            <div class="tab-pane fade show active" id="upscale" role="tabpanel">
+                                <form id="upscaleForm">
+                                    <div class="mb-3">
+                                        <label for="scale" class="form-label">Tingkat Pembesaran</label>
+                                        <select class="form-select" id="scale" name="scale"><option value="2" selected>2x</option><option value="4">4x</option></select>
+                                    </div>
+                                    <div class="mb-3 form-check">
+                                        <input type="checkbox" class="form-check-input" id="faceEnhance" name="faceEnhance" checked>
+                                        <label class="form-check-label" for="faceEnhance">Tingkatkan Kualitas Wajah</label>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" disabled><i class="bi bi-rocket-takeoff me-2"></i>Proses Upscale</button>
+                                </form>
+                                <div class="loading-spinner" id="upscaleLoading"><div class="spinner-border text-primary"></div><p class="mt-2">Meng-upscale gambar...</p></div>
+                                <div class="result-container" id="upscaleResult"></div>
+                            </div>
+                            <div class="tab-pane fade" id="removebg" role="tabpanel">
+                                <form id="removebgForm">
+                                    <p class="text-muted">Tool ini akan menghapus background dari gambar Anda secara otomatis.</p>
+                                    <button type="submit" class="btn btn-primary w-100" disabled><i class="bi bi-rocket-takeoff me-2"></i>Proses Hapus Background</button>
+                                </form>
+                                <div class="loading-spinner" id="removebgLoading"><div class="spinner-border text-primary"></div><p class="mt-2">Menghapus background...</p></div>
+                                <div class="result-container" id="removebgResult"></div>
+                            </div>
+                            <div class="tab-pane fade" id="edit" role="tabpanel">
+                                <form id="editForm">
+                                    <div class="mb-3">
+                                        <label for="prompt" class="form-label">Prompt Edit</label>
+                                        <textarea class="form-control" id="prompt" name="prompt" rows="2" placeholder="Contoh: ubah menjadi gaya anime ghibli"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" disabled><i class="bi bi-rocket-takeoff me-2"></i>Proses Edit Gambar</button>
+                                </form>
+                                <div class="loading-spinner" id="editLoading"><div class="spinner-border text-primary"></div><p class="mt-2">Mengedit dengan AI...</p></div>
+                                <div class="result-container" id="editResult"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="text-center">
+        <p class="mb-0">&copy; 2025 AlfiXD Image Tools.</p>
+    </footer>
+
+    <div class="toast-container">
+        <div id="alertToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const uploadArea = document.getElementById('uploadArea');
+            const imageInput = document.getElementById('imageInput');
+            const imagePreview = document.getElementById('imagePreview');
+            const toolForms = document.querySelectorAll('form');
+            const processButtons = document.querySelectorAll('form button[type="submit"]');
+            const toastEl = document.getElementById('alertToast');
+            const bsToast = new bootstrap.Toast(toastEl, { delay: 5000 });
+            let uploadedFile = null;
+
+            uploadArea.addEventListener('click', () => imageInput.click());
+            imageInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+            });
+            uploadArea.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+            
+            function handleFile(file) {
+                if (!file || !file.type.startsWith('image/')) {
+                    showToast('Pilih file gambar yang valid.', 'danger');
+                    return;
+                }
+                uploadedFile = file;
+                imagePreview.innerHTML = `<p class="fw-bold text-muted text-truncate" style="max-width: 90%;">${file.name}</p><img src="${URL.createObjectURL(file)}" alt="Preview">`;
+                processButtons.forEach(btn => btn.disabled = false);
+                document.querySelectorAll('.result-container').forEach(el => el.innerHTML = '');
+            }
+
+            document.getElementById('upscaleForm').addEventListener('submit', (e) => processImage(e, 'upscale'));
+            document.getElementById('removebgForm').addEventListener('submit', (e) => processImage(e, 'removebg'));
+            document.getElementById('editForm').addEventListener('submit', (e) => processImage(e, 'edit'));
+
+            async function processImage(event, action) {
+                event.preventDefault();
+                if (!uploadedFile) {
+                    showToast('Silakan upload gambar terlebih dahulu.', 'danger');
+                    return;
+                }
+                
+                const form = event.target;
+                const button = form.querySelector('button[type="submit"]');
+                const loadingSpinner = document.getElementById(`${action}Loading`);
+                const resultContainer = document.getElementById(`${action}Result`);
+
+                const formData = new FormData(form);
+                formData.append('image', uploadedFile);
+                formData.append('action', action);
+
+                button.style.display = 'none';
+                loadingSpinner.style.display = 'block';
+                resultContainer.innerHTML = '';
+
+                try {
+                    const response = await fetch('/process', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Terjadi kesalahan saat pemrosesan.');
+                    }
+                    displayResult(resultContainer, data.originalUrl, data.resultUrl);
+                    showToast('Gambar berhasil diproses!', 'success');
+                } catch (error) {
+                    resultContainer.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                    showToast(error.message, 'danger');
+                } finally {
+                    button.style.display = 'block';
+                    loadingSpinner.style.display = 'none';
+                }
+            }
+
+            function displayResult(container, originalUrl, resultUrl) {
+                container.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6 result-image">
+                            <h6>Original</h6>
+                            <img src="${originalUrl}" class="img-fluid">
+                        </div>
+                        <div class="col-md-6 result-image">
+                            <h6>Hasil</h6>
+                            <img src="${resultUrl}" class="img-fluid">
+                        </div>
+                    </div>
+                    <a href="${resultUrl}" class="btn btn-success mt-3" download target="_blank">
+                        <i class="bi bi-download me-2"></i>Download Hasil
+                    </a>`;
+            }
+
+            function showToast(message, type = 'danger') {
+                toastEl.querySelector('.toast-body').textContent = message;
+                toastEl.className = 'toast align-items-center text-white border-0';
+                toastEl.classList.add(`bg-${type}`);
+                bsToast.show();
+            }
+        });
+    </script>
+</body>
+</html>

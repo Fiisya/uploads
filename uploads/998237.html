@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfixd Chat AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f9f9f9;
+            min-height: 100vh;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .chat-container {
+            background: #fff;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 720px;
+            height: 80vh;
+            max-height: 800px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header {
+            padding: 16px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #202124;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .clear-btn {
+            background: none;
+            border: none;
+            color: #5f6368;
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: #f1f3f4;
+        }
+
+        .chat-box {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            position: relative;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .message.user-message {
+            align-self: flex-end;
+            background: #1a73e8;
+            color: #fff;
+        }
+
+        .message.bot-message {
+            align-self: flex-start;
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        .timestamp {
+            font-size: 0.75rem;
+            color: #5f6368;
+            margin-top: 4px;
+            text-align: right;
+        }
+
+        .typing-indicator {
+            align-self: flex-start;
+            display: flex;
+            gap: 6px;
+            padding: 12px 16px;
+            opacity: 0.7;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #5f6368;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-container {
+            display: flex;
+            padding: 16px;
+            border-top: 1px solid #e0e0e0;
+            background: #fff;
+            gap: 8px;
+        }
+
+        #user-input {
+            flex-grow: 1;
+            border: 1px solid #dadce0;
+            padding: 12px 16px;
+            border-radius: 24px;
+            background: #fff;
+            color: #202124;
+            font-size: 0.95rem;
+            resize: none;
+            min-height: 40px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        #user-input::placeholder {
+            color: #5f6368;
+        }
+
+        #user-input:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+
+        #send-btn {
+            background: #1a73e8;
+            color: #fff;
+            border: none;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            transition: background 0.2s;
+        }
+
+        #send-btn:hover {
+            background: #1557b0;
+        }
+
+        #send-btn svg {
+            fill: #fff;
+            width: 20px;
+            height: 20px;
+        }
+
+        .chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-box::-webkit-scrollbar-thumb {
+            background: #dadce0;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+                margin: 0;
+            }
+
+            .chat-header {
+                font-size: 1rem;
+            }
+
+            .message {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <span>Alfixd Chat AI</span>
+            <button class="clear-btn" id="clear-btn">Clear Chat</button>
+        </div>
+        <div class="chat-box" id="chat-box"></div>
+        <div class="input-container">
+            <textarea id="user-input" placeholder="Ask Alfixd anything..." rows="1"></textarea>
+            <button id="send-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Mistral API configuration
+        const apiUrl = "https://api.mistral.ai/v1/conversations";
+        const apiKey = "Bearer dzHFHOLdkI8mNiDhzedJPWMs049AwXbF"; // Replace with your valid Mistral API key
+        const agentId = "ag:78bc2c85:20250908:alfixd-agent:4e903e2e";
+        const userId = "anonymous"; // Fixed userId for client-side
+
+        // Load chat history from localStorage
+        function loadChatHistory() {
+            const history = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            history.forEach(msg => appendMessage(msg.role, msg.content, msg.timestamp));
+        }
+
+        // Save message to localStorage
+        function saveMessage(role, content, timestamp) {
+            const history = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            history.push({ role, content, timestamp });
+            localStorage.setItem('chatHistory', JSON.stringify(history));
+        }
+
+        // Clear chat history
+        function clearChatHistory() {
+            localStorage.removeItem('chatHistory');
+            document.getElementById('chat-box').innerHTML = '';
+        }
+
+        // Append message to chat box
+        function appendMessage(role, content, timestamp = new Date().toLocaleTimeString()) {
+            const chatBox = document.getElementById('chat-box');
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', `${role === 'user' ? 'user-message' : 'bot-message'}`);
+            messageElement.innerHTML = `
+                <div>${content}</div>
+                <div class="timestamp">${timestamp}</div>
+            `;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Show typing indicator
+        function showTypingIndicator() {
+            const chatBox = document.getElementById('chat-box');
+            const typingElement = document.createElement('div');
+            typingElement.classList.add('typing-indicator');
+            typingElement.innerHTML = '<span></span><span></span><span></span>';
+            chatBox.appendChild(typingElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return typingElement;
+        }
+
+        // Auto-resize textarea
+        function autoResizeTextarea() {
+            const textarea = document.getElementById('user-input');
+            textarea.style.height = 'auto';
+            textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
+        }
+
+        // Fetch with timeout
+        async function fetchWithTimeout(url, options, timeout = 10000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
+        }
+
+        // API call with retry logic
+        async function fetchAIResponse(userInput, retries = 2, delay = 1000) {
+            const history = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            history.push({ role: "user", content: userInput });
+
+            const inputs = history.map(h => `${h.role}: ${h.content}`).join("\n");
+
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const response = await fetchWithTimeout(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'Authorization': apiKey
+                        },
+                        body: JSON.stringify({
+                            inputs: inputs,
+                            stream: false,
+                            agent_id: agentId
+                        })
+                    }, 10000);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.outputs && data.outputs.length > 0) {
+                        return data.outputs[0].content || 'No response received';
+                    } else {
+                        throw new Error('No outputs received from API');
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${attempt} failed:`, error.message);
+                    if (attempt === retries) {
+                        if (error.name === 'AbortError') {
+                            return 'Error: Request timed out. Please try again later.';
+                        }
+                        if (error.message.includes('Failed to fetch')) {
+                            return 'Error: Unable to connect to the API. Check your network or API key.';
+                        }
+                        return `Error: ${error.message}`;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadChatHistory();
+            autoResizeTextarea();
+
+            // Auto-resize textarea on input
+            document.getElementById('user-input').addEventListener('input', autoResizeTextarea);
+
+            // Send message
+            document.getElementById('send-btn').addEventListener('click', async () => {
+                const userInput = document.getElementById('user-input').value.trim();
+                if (!userInput) return;
+
+                const timestamp = new Date().toLocaleTimeString();
+                appendMessage('user', userInput, timestamp);
+                saveMessage('user', userInput, timestamp);
+                document.getElementById('user-input').value = '';
+                autoResizeTextarea();
+
+                const typingElement = showTypingIndicator();
+
+                try {
+                    const botResponse = await fetchAIResponse(userInput);
+                    typingElement.remove();
+                    const botTimestamp = new Date().toLocaleTimeString();
+                    appendMessage('assistant', botResponse, botTimestamp);
+                    saveMessage('assistant', botResponse, botTimestamp);
+                } catch (error) {
+                    typingElement.remove();
+                    const botTimestamp = new Date().toLocaleTimeString();
+                    appendMessage('assistant', 'Error: Something went wrong. Please check your API key or try again.', botTimestamp);
+                    saveMessage('assistant', 'Error: Something went wrong. Please check your API key or try again.', botTimestamp);
+                    console.error('Final API Error:', error);
+                }
+            });
+
+            // Clear chat button
+            document.getElementById('clear-btn').addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear the chat history?')) {
+                    clearChatHistory();
+                }
+            });
+
+            // Send message on Enter key
+            document.getElementById('user-input').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    document.getElementById('send-btn').click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

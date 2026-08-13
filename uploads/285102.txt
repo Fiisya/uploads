@@ -1,0 +1,256 @@
+/**
+ * by:Lynd - Rena-chan
+ *
+ * VidsSave Scraper (id.vidssave.com)
+ * API reverse-engineered dari Next.js bundle (chunk768-3c6e1178b4c9e3cf.js)
+ *
+ * ═══════════════════════ ARCHITECTURE ═══════════════════════
+ *
+ * Base URL : https://api.vidssave.com/api/contentsite_api
+ * Auth     : auth=20250901majwlqo (hardcoded di JS bundle)
+ * Domain   : id.vidssave.com (atau domain mirror lain)
+ *
+ * ═══════════════════════ ENDPOINTS ══════════════════════════
+ *
+ * POST /media/parse
+ *   Body: auth, domain, origin=[source|cache], link=<url>
+ *   origin=source → fresh parse (lambat, semua quality, download_url kadang kosong)
+ *   origin=cache  → cached parse (cepat, download_mode=direct, URL siap pakai)
+ *   Strategy: cache dulu (cepat), fallback ke source kalau cache kosong
+ *
+ *   Response:
+ *     status: 1 = ok, 0 = error, -1 = captcha failed
+ *     data.resources[]:
+ *       resource_id    : UUID untuk task API
+ *       quality        : "144P", "720P", "1080P", "128KBPS", dll.
+ *       format         : "MP4", "WebM", "MP3"
+ *       type           : "video" | "audio"
+ *       size           : bytes
+ *       download_url   : direct URL (kosong jika belum resolve)
+ *       download_mode  : "" | "direct" | "check_download" | "popup"
+ *         - "direct"   → download_url siap dipakai langsung (via /media/download_redirect)
+ *         - "check_download" → sudah ada download_url (googlevideo direct), bisa langsung
+ *         - ""         → perlu resolve via task API
+ *         - "popup"    → duplikat dari cache, bisa langsung
+ *       has_audio      : bool (video dengan audio mux atau tidak)
+ *
+ * POST /media/download
+ *   Body: auth, domain, resource_id
+ *   Response: { status:1, data: { task_id } }
+ *   → Untuk mode="" yang tidak punya download_url
+ *
+ * POST /media/download_query (SSE)
+ *   Body: auth, domain, task_id
+ *   Response: Server-Sent Events stream:
+ *     event: progress | data: { status:"processing", progress:0-100, filesize, download_link }
+ *     event: success  | data: { status:"success", download_link:"https://..." }
+ *     event: failed   | data: { status:"failed" }
+ *
+ * GET /media/download_redirect?request=<token>
+ *   → Redirect ke actual CDN URL (googlevideo, ytdl, etc.)
+ *   → Dari cache origin, download_url sudah mengandung path ini
+ *
+ * ═══════════════════════ DETAIL NOTES ═══════════════════════
+ *
+ * Limits (client-side, bisa di-bypass):
+ *   - 1080P daily limit (localStorage: vdm_daily_1080p_date)
+ *   - 10 downloads per hari (localStorage: vdm_daily_success_count)
+ *   → Semua limit ini hanya di browser, API tidak enforce
+ *
+ * Supported platforms:
+ *   YouTube (include Shorts, Music), TikTok, Instagram, Twitter/X,
+ *   Facebook, dan platform lain yang didukung backend vidmate/vidssave.
+ *
+ * ═══════════════════════ USAGE ═══════════════════════════════
+ *
+ *   import { parse, resolveDownload } from './vidssave-scraper.mjs'
+ *
+ *   // Parse (cache first, fallback source)
+ *   const result = await parse('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+ *   // { title, thumbnail, duration, video:[], audio:[] }
+ *   // Semua item dengan download_url=null perlu resolveDownload()
+ *
+ *   // Resolve task-based download
+ *   const url = await resolveDownload(resource_id)
+ */
+
+const BASE_URL = 'https://api.vidssave.com/api/contentsite_api'
+const AUTH = '20250901majwlqo'
+const DOMAIN = 'id.vidssave.com'
+
+/**
+ * POST helper - application/x-www-form-urlencoded
+ */
+async function post(path, params) {
+  const body = new URLSearchParams({ auth: AUTH, domain: DOMAIN, ...params })
+  const res = await fetch(`${BASE_URL}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`)
+  return res.json()
+}
+
+/**
+ * Internal: parse one origin (cache or source)
+ */
+async function _parse(url, origin) {
+  const data = await post('media/parse', { origin, link: url })
+  if (data.status === 1) return data.data
+  if (data.status === -1) throw new Error('captcha failed')
+  return null
+}
+
+/**
+ * Format resources array → { video, audio }
+ */
+function _formatResources(resources) {
+  const video = []
+  const audio = []
+
+  for (const r of resources) {
+    const item = {
+      quality: r.quality,
+      format: r.format || 'MP4',
+      size: r.size || 0,
+      // download_url: siap dipakai kalau ada, null kalau butuh resolveDownload()
+      download_url: r.download_url || null,
+      resource_id: r.resource_id,
+      // download_mode referensi: "" | "direct" | "check_download" | "popup"
+      download_mode: r.download_mode || '',
+      has_audio: r.has_audio ?? null,
+      isFast: r.isFast ?? (r.download_mode === 'direct')
+    }
+    if (r.type === 'video') video.push(item)
+    else if (r.type === 'audio') audio.push(item)
+  }
+
+  // Dedup by quality (ambil yang punya download_url, prefer direct mode)
+  const dedup = (arr) => {
+    const map = new Map()
+    for (const item of arr) {
+      const key = item.quality
+      const existing = map.get(key)
+      if (!existing || (item.download_url && !existing.download_url)) {
+        map.set(key, item)
+      }
+    }
+    return [...map.values()]
+  }
+
+  // Sort ascending quality number
+  const qualNum = (q) => {
+    const n = parseInt(q)
+    if (!isNaN(n)) return n
+    // audio: LOW=0, 48KBPS=48, 128KBPS=128, etc.
+    const kbps = q.match(/(\d+)KBPS/)
+    if (kbps) return parseInt(kbps[1])
+    return 0
+  }
+  const sort = (arr) => arr.sort((a, b) => qualNum(a.quality) - qualNum(b.quality))
+
+  return {
+    video: sort(dedup(video)),
+    audio: sort(dedup(audio))
+  }
+}
+
+/**
+ * Parse video info dari URL.
+ * Strategy: coba origin=cache dulu (cepat, direct URLs), fallback ke origin=source.
+ *
+ * @param {string} url - URL video/audio
+ * @param {'cache'|'source'|'auto'} origin - default 'auto' (cache then source)
+ * @returns {{ title, thumbnail, duration, video, audio }}
+ *   video/audio = array of { quality, format, size, download_url, resource_id, download_mode, has_audio, isFast }
+ */
+export async function parse(url, origin = 'auto') {
+  let raw = null
+
+  if (origin === 'cache' || origin === 'auto') {
+    raw = await _parse(url, 'cache')
+  }
+
+  if ((!raw || !raw.resources?.length) && (origin === 'source' || origin === 'auto')) {
+    raw = await _parse(url, 'source')
+  }
+
+  if (!raw) throw new Error('parse failed: no data from both origins')
+
+  const { title, thumbnail, duration, resources } = raw
+  const { video, audio } = _formatResources(resources)
+
+  return { title, thumbnail, duration, video, audio }
+}
+
+/**
+ * Resolve download URL untuk resource yang download_url=null.
+ * Submits task → polls SSE → returns download_link.
+ *
+ * @param {string} resource_id
+ * @param {number} timeoutMs - max wait ms (default 60s)
+ * @returns {string} download_link (direct URL)
+ */
+export async function resolveDownload(resource_id, timeoutMs = 60_000) {
+  // Step 1: submit task
+  const taskRes = await post('media/download', { resource_id })
+  if (taskRes.status !== 1) throw new Error(`submit task failed: ${taskRes.msg}`)
+  const task_id = taskRes.data.task_id
+
+  // Step 2: stream SSE
+  const body = new URLSearchParams({ auth: AUTH, domain: DOMAIN, task_id })
+  const res = await fetch(`${BASE_URL}/media/download_query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+    signal: AbortSignal.timeout(timeoutMs)
+  })
+
+  const text = await res.text()
+
+  // Parse SSE: "event: X\ndata: {...}\n\n"
+  for (const block of text.split('\n\n')) {
+    const evtLine = block.match(/^event:\s*(.+)/m)
+    const dataLine = block.match(/^data:\s*(.+)/m)
+    if (!dataLine) continue
+    const d = JSON.parse(dataLine[1])
+    const evt = evtLine?.[1]?.trim()
+    if (evt === 'success' || d.status === 'success') return d.download_link
+    if (evt === 'failed' || d.status === 'failed') throw new Error('task processing failed on server')
+  }
+
+  throw new Error('SSE stream ended without success event')
+}
+
+// ─── CLI ─────────────────────────────────────────────────────────────────────
+if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('vidssave-scraper.mjs')) {
+  const url = process.argv[2]
+  if (!url) {
+    console.error('Usage: node vidssave-scraper.mjs <url> [cache|source|auto]')
+    process.exit(1)
+  }
+  const origin = process.argv[3] || 'auto'
+
+  console.log(`Parsing (origin=${origin}): ${url}`)
+  const result = await parse(url, origin)
+
+  console.log('\n=== INFO ===')
+  console.log('Title    :', result.title)
+  console.log('Duration :', result.duration, 's')
+  console.log('Thumbnail:', result.thumbnail)
+
+  console.log('\n=== VIDEO ===')
+  for (const v of result.video) {
+    const mb = (v.size / 1024 / 1024).toFixed(2)
+    const dl = v.download_url ? `✅ ${v.download_url.slice(0, 80)}...` : `⚠️  need resolveDownload(resource_id=${v.resource_id})`
+    console.log(`  ${v.format.padEnd(5)} ${v.quality.padEnd(7)} ${mb.padStart(8)} MB | fast=${v.isFast} | ${dl}`)
+  }
+
+  console.log('\n=== AUDIO ===')
+  for (const a of result.audio) {
+    const mb = (a.size / 1024 / 1024).toFixed(2)
+    const dl = a.download_url ? `✅ ${a.download_url.slice(0, 80)}...` : `⚠️  need resolveDownload(resource_id=${a.resource_id})`
+    console.log(`  ${a.format.padEnd(5)} ${a.quality.padEnd(7)} ${mb.padStart(8)} MB | fast=${a.isFast} | ${dl}`)
+  }
+}

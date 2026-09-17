@@ -1,0 +1,344 @@
+/*
+Base : https://notegpt.io/nano-banana
+Developer : ZenzzXD
+Jan lupa polow : https://whatsapp.com/channel/0029Vb7t6q7A89MjyGEBG41y
+*/
+
+const axios = require('axios')
+const crypto = require('crypto')
+
+const headers = {
+  'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+  'Accept-Language': 'id-ID,id;q=0.9,en-AU;q=0.8,en;q=0.7,en-US;q=0.6'
+}
+
+function parseCookies(arr) {
+  return Object.fromEntries(
+    (arr || []).map(c => {
+      const [pair] = c.split(';')
+      const i = pair.indexOf('=')
+      return i < 0 ? [] : [pair.slice(0, i).trim(), pair.slice(i + 1).trim()]
+    }).filter(e => e.length)
+  )
+}
+
+async function getSession() {
+  const page = await axios.get('https://notegpt.io/nano-banana', {
+    headers: { ...headers, Accept: 'text/html' }
+  }).catch(() => ({ headers: {} }))
+
+  const jar = parseCookies(page.headers['set-cookie'])
+  const anonId = jar.anonymous_user_id || crypto.randomUUID()
+  const gaRand = Math.floor(Math.random() * 1e9)
+  const nowSec = Math.floor(Date.now() / 1000)
+  const crispId = crypto.randomUUID()
+  const fakeIp = `${Math.floor(Math.random() * 150) + 50}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`
+
+  jar.anonymous_user_id = anonId
+  if (!jar._ga) jar._ga = `GA1.2.${gaRand}.${nowSec}`
+  if (!jar._gid) jar._gid = `GA1.2.${gaRand}.${nowSec}`
+  jar[`crisp-client%2Fsession%2F${crispId}`] = `session_${crispId}`
+  jar.g_state = `{"i_l":0,"i_ll":${Date.now()},"i_b":"yeFk1wDsyGfoayFEOiLa/IjWhdrP/E9mGw1Dbyp63TU","i_e":{"enable_itp_optimization":24},"i_et":${Date.now()}}`
+
+  return {
+    Cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; '),
+    'X-Forwarded-For': fakeIp,
+    'X-Real-IP': fakeIp
+  }
+}
+
+let wasmExports
+let wasmAllocLen = 0
+const encoder = new TextEncoder()
+const decoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true })
+
+function getMem() {
+  return new Uint8Array(wasmExports.memory.buffer)
+}
+
+function decodeStr(ptr, len) {
+  return decoder.decode(getMem().subarray(ptr >>> 0, (ptr >>> 0) + len))
+}
+
+function encodeStr(str, mallocFn) {
+  const enc = encoder.encode(str)
+  const ptr = mallocFn(enc.length, 1) >>> 0
+  getMem().subarray(ptr, ptr + enc.length).set(enc)
+  wasmAllocLen = enc.length
+  return ptr
+}
+
+function catchException(ptr) {
+  const err = wasmExports.__wbindgen_externrefs.get(ptr)
+  wasmExports.__externref_table_dealloc(ptr)
+  return err
+}
+
+function handleException(fn, args) {
+  try {
+    return fn.apply(this, args)
+  } catch (err) {
+    const ptr = wasmExports.__externref_table_alloc()
+    wasmExports.__wbindgen_externrefs.set(ptr, err)
+    wasmExports.__wbindgen_exn_store(ptr)
+  }
+}
+
+async function initWasm() {
+  if (wasmExports) return
+
+  const wasmPath = path.join(__dirname, 'crypto_util.wasm')
+  let wasmBuf
+
+  if (fs.existsSync(wasmPath)) {
+    wasmBuf = fs.readFileSync(wasmPath)
+  } else {
+    const res = await axios.get(
+      'https://cdn.notegpt.io/notegpt/pages/public/_nuxt/crypto_util_bg.Bd4ztPln.wasm',
+      { responseType: 'arraybuffer' }
+    )
+
+    wasmBuf = Buffer.from(res.data)
+
+    const pat = Buffer.from([0x41, 0xda, 0xa0, 0xc0, 0x00])
+    const idx = wasmBuf.indexOf(pat)
+
+    if (idx !== -1) {
+      Buffer.from([0x1a, 0x41, 0x01, 0x01, 0x01, 0x01, 0x01]).copy(wasmBuf, idx - 16)
+    }
+
+    fs.writeFileSync(wasmPath, wasmBuf)
+  }
+
+  const imports = {
+    './crypto_util_bg.js': {
+      __wbg___wbindgen_is_falsy_f8005c4864e74c90: e => !e,
+      __wbg___wbindgen_is_function_d4c2480b46f29e33: e => typeof e === 'function',
+      __wbg___wbindgen_is_object_e04e3a51a90cde43: e => typeof e === 'object' && !!e,
+      __wbg___wbindgen_is_string_3db04af369717583: e => typeof e === 'string',
+      __wbg___wbindgen_is_undefined_5957b329897cc39c: e => e === undefined,
+      __wbg___wbindgen_throw_bd5a70920abf0236: (e, t) => { throw Error(decodeStr(e, t)) },
+      __wbg_crypto_38df2bab126b63dc: () => crypto.webcrypto,
+      __wbg_getHours_defd69626029ce3f: () => new Date().getHours(),
+      __wbg_getRandomValues_c44a50d8cfdaebeb: function () {
+        return handleException((e, t) => e.getRandomValues(t), arguments)
+      },
+      __wbg_randomFillSync_6c25eac9869eb53c: function () {
+        return handleException((e, t) => e.randomFillSync(t), arguments)
+      },
+      __wbg_random_d9645defc0204485: () => Math.random(),
+      __wbg_now_cd850b0a28a6e656: () => Date.now(),
+      __wbg_new_0_1211b165db93342c: () => new Date(),
+      __wbg_new_ebde992a0bf6bdf6: (e, t) => Error(decodeStr(e, t)),
+      __wbg_require_b4edbdcf3e2a1ef0: () => module.require,
+      __wbg_versions_276b2795b1c6a219: () => process.versions,
+      __wbg_node_84ea875411254db1: () => process,
+      __wbg_process_44c7a14e11e9f69e: () => process,
+      __wbg_static_accessor_GLOBAL_44bef9fa6011e260: () => global,
+      __wbg_static_accessor_GLOBAL_THIS_13002645baf43d84: () => globalThis,
+      __wbg_static_accessor_SELF_91d0abd4d035416c: () => self,
+      __wbg_static_accessor_WINDOW_513f857c65724fc7: () => window,
+      __wbg_new_with_length_a90559ebda3954f8: e => new Uint8Array(e >>> 0),
+      __wbg_subarray_fb60755cb1b4a498: (e, t, n) => e.subarray(t >>> 0, n >>> 0),
+      __wbg_length_090b6aa6235450ba: e => e.length,
+      __wbg_prototypesetcall_7dca54d31cb9d2dc: (e, t, n) => {
+        Uint8Array.prototype.set.call(getMem().subarray(e >>> 0, e + t), n)
+      },
+      __wbindgen_cast_0000000000000001: (e, t) => getMem().subarray(e >>> 0, e + t),
+      __wbindgen_cast_0000000000000002: (e, t) => decodeStr(e, t),
+      __wbindgen_init_externref_table: () => {
+        const e = wasmExports.__wbindgen_externrefs
+        const t = e.grow(4)
+        e.set(0, undefined)
+        e.set(t, undefined)
+        e.set(t + 1, null)
+        e.set(t + 2, true)
+        e.set(t + 3, false)
+      }
+    }
+  }
+
+  const mod = new WebAssembly.Module(wasmBuf)
+  const inst = new WebAssembly.Instance(mod, imports)
+  wasmExports = inst.exports
+  wasmExports.__wbindgen_start()
+}
+
+function signPayload(body, appId = 'notegpt_8c92b6') {
+  function format(v) {
+    if (v === null) return String(v)
+    if (Array.isArray(v)) return JSON.stringify(v)
+    if (typeof v === 'object') {
+      const obj = {}
+      Object.keys(v).sort().forEach(k => (obj[k] = v[k]))
+      return JSON.stringify(obj)
+    }
+    return String(v)
+  }
+
+  const query = Object.keys(body)
+    .filter(k => body[k] !== undefined)
+    .sort()
+    .map(k => `${k}=${format(body[k])}`)
+    .join('&')
+
+  let p, l
+
+  try {
+    const appPtr = encodeStr(appId, wasmExports.__wbindgen_malloc)
+    const appLen = wasmAllocLen
+
+    const queryPtr = encodeStr(query, wasmExports.__wbindgen_malloc)
+    const queryLen = wasmAllocLen
+
+    const res = wasmExports.sign(appPtr, appLen, queryPtr, queryLen)
+
+    p = res[0]
+    l = res[1]
+
+    if (res[3]) throw catchException(res[2])
+
+    return decodeStr(p, l)
+  } finally {
+    wasmExports.__wbindgen_free(p, l, 1)
+  }
+}
+
+async function uploadImage(image) {
+  const session = await getSession()
+  const appId = 'notegpt_8c92b6'
+
+  let buffer
+
+  if (Buffer.isBuffer(image)) {
+    buffer = image
+  } else if (image.startsWith('http')) {
+    const res = await axios.get(image, { responseType: 'arraybuffer' })
+    buffer = Buffer.from(res.data)
+  } else if (image.startsWith('data:image/')) {
+    buffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64')
+  } else {
+    buffer = Buffer.from(image, 'base64')
+  }
+
+  const payload = {
+    t: Math.floor(Date.now() / 1000),
+    app_id: appId,
+    filename: 'image.jpg',
+    file_size: buffer.length,
+    headers: { 'Content-Type': 'image/jpeg' },
+    biz: 'image',
+    temp: true
+  }
+
+  payload.sign = signPayload(payload, appId)
+
+  const sign = await axios.post(
+    'https://notegpt.io/api/v1/upload/sign-url',
+    payload,
+    {
+      headers: {
+        ...headers,
+        ...session,
+        Origin: 'https://notegpt.io',
+        Referer: 'https://notegpt.io/nano-banana'
+      }
+    }
+  )
+
+  const { upload_url, object_key } = sign.data.data
+
+  await axios.put(upload_url, buffer, {
+    headers: { 'Content-Type': 'image/jpeg' }
+  })
+
+  return {
+    session,
+    imageUrl: `https://cdn.ng-resource.com/${object_key}`
+  }
+}
+
+async function createjob(imagePath, prompt) {
+  await initWasm()
+
+  const { session, imageUrl } = await uploadImage(imagePath)
+  const appId = 'notegpt_8c92b6'
+
+  const payload = {
+    image_urls: [imageUrl],
+    type: 60,
+    user_prompt: prompt,
+    aspect_ratio: 'match_input_image',
+    num: 1,
+    model: '',
+    sub_type: 3,
+    upscale: 2,
+    resolution: '1k',
+    t: Math.floor(Date.now() / 1000),
+    app_id: appId
+  }
+
+  payload.sign = signPayload(payload, appId)
+
+  const res = await axios.post(
+    'https://notegpt.io/api/v2/images/start',
+    payload,
+    {
+      headers: {
+        ...headers,
+        ...session,
+        'Content-Type': 'application/json; charset=UTF-8',
+        Origin: 'https://notegpt.io',
+        Referer: 'https://notegpt.io/nano-banana'
+      }
+    }
+  )
+
+  return {
+    session,
+    jobId: res.data.data.session_id
+  }
+}
+
+async function checkjob(jobId, session) {
+  const res = await axios.get(
+    `https://notegpt.io/api/v2/images/status?session_id=${jobId}`,
+    {
+      headers: {
+        ...headers,
+        ...session,
+        Referer: 'https://notegpt.io/nano-banana'
+      }
+    }
+  )
+
+  return res.data.data
+}
+
+async function nanobanana(imagePath, prompt) {
+  const { jobId, session } = await createjob(imagePath, prompt)
+
+  let result
+
+  do {
+    await new Promise(r => setTimeout(r, 2500))
+    result = await checkjob(jobId, session)
+
+    if (result.status === 'failed') {
+      throw new Error(result.message || 'Generation failed')
+    }
+  } while (result.status !== 'succeeded')
+
+  const image = Array.isArray(result.results[0].url)
+    ? result.results[0].url[0]
+    : result.results[0].url
+
+  return {
+    job_id: jobId,
+    image
+  }
+}
+
+nanobanana('./tes.jpg', 'ubah warna nya menjadi ungu')
+  .then(console.log)
+  .catch(console.error)
